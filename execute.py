@@ -1,6 +1,7 @@
 """This module contains the code to execute the task."""
 
 import json
+import os
 import sys
 import time
 import numpy as np
@@ -22,7 +23,7 @@ def compute_metrics(eval_pred):
     }
 
 
-def execute(task_args):
+def execute(task_args, GPUID):
     """This function executes the task."""
     print_in_color("Starting training...", "\033[34m")  # Blue for start
 
@@ -36,12 +37,13 @@ def execute(task_args):
     model = AutoModelForSequenceClassification.from_pretrained(
         task_args["model_name"], num_labels=task_args["num_labels"]
     )
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print_in_color(f"使用GPU:{GPUID}", "\033[34m")
+    device = torch.device(f"cuda:{GPUID}" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     dataset = load_dataset(task_args["dataset_name"])
     tokenized_datasets = dataset.map(tokenize_function, batched=True)
-
+        
     small_train_dataset = (
         tokenized_datasets["train"].shuffle(seed=task_args["seed"]).select(range(task_args["num_rows"]))
     )
@@ -109,6 +111,11 @@ def complete_task(wallet_address, max_retries=5, retry_delay=10):
 
 def perform():
     addr = sys.argv[1] 
+    GPUID = sys.argv[2]
+    if GPUID is None:
+        GPUID = 0
+    else:
+        GPUID = int(GPUID)
     if addr is not None:
         print_in_color(f"Address {addr} started to work.", "\033[33m")
         while True:
@@ -117,7 +124,7 @@ def perform():
                 time.sleep(5)
                 task_args = register_particle(addr)
                 print_in_color(f"Address {addr} received the task.", "\033[33m")
-                execute(task_args)
+                execute(task_args, GPUID)
                 print_in_color(f"Address {addr} executed the task.", "\033[32m")
                 complete_task(addr)
                 print_in_color(f"Address {addr} completed the task. Waiting for next", "\033[32m")
