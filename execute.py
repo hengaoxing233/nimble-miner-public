@@ -33,7 +33,7 @@ def execute(task_args, GPUID):
         return tokenizer(
             examples["text"], padding="max_length", truncation=True
         )
-  
+
     model = AutoModelForSequenceClassification.from_pretrained(
         task_args["model_name"], num_labels=task_args["num_labels"]
     )
@@ -43,7 +43,7 @@ def execute(task_args, GPUID):
 
     dataset = load_dataset(task_args["dataset_name"])
     tokenized_datasets = dataset.map(tokenize_function, batched=True)
-        
+
     small_train_dataset = (
         tokenized_datasets["train"].shuffle(seed=task_args["seed"]).select(range(task_args["num_rows"]))
     )
@@ -51,7 +51,7 @@ def execute(task_args, GPUID):
         tokenized_datasets["train"].shuffle(seed=task_args["seed"]).select(range(task_args["num_rows"]))
     )
     training_args = TrainingArguments(
-        output_dir="my_model", evaluation_strategy="epoch", save_strategy='epoch',
+        output_dir=f"my_model{GPUID}", evaluation_strategy="epoch", save_strategy='epoch',
     )
 
     trainer = Trainer(
@@ -62,7 +62,7 @@ def execute(task_args, GPUID):
         compute_metrics=compute_metrics,
     )
     trainer.train()
-    trainer.save_model("my_model")
+    trainer.save_model(f"my_model{GPUID}")
 
 
 def print_in_color(text, color_code):
@@ -84,14 +84,14 @@ def register_particle(addr):
     return task['args']
 
 
-def complete_task(wallet_address, max_retries=5, retry_delay=10):
+def complete_task(wallet_address, GPUID, max_retries=5, retry_delay=10):
     retries = 0
     while retries < max_retries:
         try:
             url = f"{node_url}/complete_task"
             files = {
-                "file1": open("my_model/config.json", "rb"),
-                "file2": open("my_model/training_args.bin", "rb"),
+                "file1": open(f"my_model{GPUID}/config.json", "rb"),
+                "file2": open(f"my_model{GPUID}/training_args.bin", "rb"),
             }
             json_data = json.dumps({"address": wallet_address})
             files["r"] = (None, json_data, "application/json")
@@ -110,7 +110,7 @@ def complete_task(wallet_address, max_retries=5, retry_delay=10):
 
 
 def perform():
-    addr = sys.argv[1] 
+    addr = sys.argv[1]
     GPUID = sys.argv[2]
     if GPUID is None:
         GPUID = 0
@@ -126,13 +126,13 @@ def perform():
                 print_in_color(f"Address {addr} received the task.", "\033[33m")
                 execute(task_args, GPUID)
                 print_in_color(f"Address {addr} executed the task.", "\033[32m")
-                complete_task(addr)
+                complete_task(addr, GPUID)
                 print_in_color(f"Address {addr} completed the task. Waiting for next", "\033[32m")
                 time.sleep(60)
             except Exception as e:
                 print_in_color(f"Error: {e}", "\033[31m")
     else:
         print_in_color("Address not provided.", "\033[31m")
-    
+
 if __name__ == "__main__":
     perform()
